@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>HSK Cards</title>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 16px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    background: #f2f2f2;
+}
+
+#container {
+    max-width: 640px;
+    margin: 0 auto;
+}
+
+.card {
+    background: white;
+    border-radius: 14px;
+    box-shadow: 0 4px 12px rgba(0,0,0,.15);
+    padding: 24px;
+}
+
+h1 {
+    margin-top: 0;
+    text-align: center;
+}
+
+label {
+    display: block;
+    padding: 10px 0;
+    font-size: 1.15rem;
+}
+
+input[type=checkbox] {
+    transform: scale(1.3);
+    margin-right: 10px;
+}
+
+#level {
+    text-align: center;
+    color: #1976d2;
+    font-weight: bold;
+    font-size: 1rem;
+    letter-spacing: 0.05em;
+    margin-bottom: 12px;
+}
+
+button {
+    width: 100%;
+    border: none;
+    border-radius: 8px;
+    padding: 16px;
+    font-size: 1.1rem;
+    cursor: pointer;
+    color: white;
+    background: #1976d2;
+    margin-top: 12px;
+}
+
+button:hover {
+    background: #1565c0;
+}
+
+#backButton {
+    width: auto;
+    padding: 10px 16px;
+    margin: 0 0 24px 0;
+}
+
+.hanzi {
+    font-size: clamp(3.5rem, 14vw, 5.5rem);
+    text-align: center;
+    margin-top: 20px;
+}
+
+.pinyin {
+    text-align: center;
+    color: #666;
+    font-size: clamp(1.3rem, 5vw, 2rem);
+    margin-top: 12px;
+}
+
+.english {
+    text-align: center;
+    font-size: clamp(1.5rem, 6vw, 2.3rem);
+    margin: 20px 0 36px 0;
+}
+
+#status {
+    text-align: center;
+    color: #666;
+    margin-top: 18px;
+}
+
+.hidden {
+    display: none;
+}
+
+@media (min-width: 700px) {
+    .card {
+        padding: 36px;
+    }
+}
+</style>
+
+</head>
+<body>
+
+<div id="container">
+
+<div class="card">
+
+<!-- SETTINGS -->
+
+<div id="settingsView">
+
+<h1>HSK Cards</h1>
+
+<label><input type="checkbox" value="1" checked>HSK 1</label>
+<label><input type="checkbox" value="2" checked>HSK 2</label>
+<label><input type="checkbox" value="3">HSK 3</label>
+<label><input type="checkbox" value="4">HSK 4</label>
+<label><input type="checkbox" value="5">HSK 5</label>
+<label><input type="checkbox" value="6">HSK 6</label>
+
+<button id="goButton">Start</button>
+
+</div>
+
+<!-- STUDY -->
+
+<div id="studyView" class="hidden">
+
+<button id="backButton">← Back</button>
+
+<div id="level"></div>
+
+<div class="hanzi" id="hanzi"></div>
+
+<div class="pinyin" id="pinyin"></div>
+
+<div class="english" id="english"></div>
+
+<button id="nextButton">Next Card</button>
+
+<div id="status"></div>
+
+</div>
+
+</div>
+
+</div>
+
+<script>
+
+let deck = [];
+let currentIndex = 0;
+
+// Restore saved HSK selections
+
+const savedLevels = JSON.parse(localStorage.getItem("hskLevels") || "[]");
+
+if (savedLevels.length) {
+    document.querySelectorAll("input[type=checkbox]").forEach(cb => {
+        cb.checked = savedLevels.includes(cb.value);
+    });
+}
+
+function shuffle(array) {
+
+    for (let i = array.length - 1; i > 0; i--) {
+
+        const j = Math.floor(Math.random() * (i + 1));
+
+        [array[i], array[j]] = [array[j], array[i]];
+
+    }
+
+}
+
+async function loadCSV(level) {
+
+    const response = await fetch(`hsk${level}.csv`);
+
+    if (!response.ok)
+        throw new Error(`Couldn't load hsk${level}.csv`);
+
+    const text = await response.text();
+
+    return text
+        .trim()
+        .split(/\r?\n/)
+        .map(line => {
+
+            const parts = line.split(",");
+
+            return {
+                hanzi: parts[0].trim(),
+                pinyin: parts[1].trim(),
+                english: parts.slice(2).join(",").trim(),
+                level: level
+            };
+
+        });
+
+}
+
+function showCard() {
+
+    if (currentIndex >= deck.length) {
+
+        shuffle(deck);
+
+        currentIndex = 0;
+
+    }
+
+    const card = deck[currentIndex];
+
+    document.getElementById("hanzi").textContent = card.hanzi;
+    document.getElementById("pinyin").textContent = card.pinyin;
+    document.getElementById("english").textContent = card.english;
+
+    document.getElementById("status").textContent =
+        `Card ${currentIndex + 1} of ${deck.length}`;
+    document.getElementById("level").textContent =
+        `HSK ${card.level}`;
+
+}
+
+async function startStudy() {
+
+    const selected =
+        [...document.querySelectorAll("input[type=checkbox]:checked")]
+            .map(cb => cb.value);
+
+    if (selected.length === 0) {
+
+        alert("Please select at least one HSK level.");
+
+        return;
+
+    }
+
+    localStorage.setItem("hskLevels", JSON.stringify(selected));
+
+    deck = [];
+
+    try {
+
+        for (const level of selected) {
+
+            const words = await loadCSV(level);
+
+            deck.push(...words);
+
+        }
+
+    } catch (err) {
+
+        alert(err.message);
+
+        return;
+
+    }
+
+    shuffle(deck);
+
+    currentIndex = 0;
+
+    document.getElementById("settingsView").classList.add("hidden");
+    document.getElementById("studyView").classList.remove("hidden");
+
+    showCard();
+
+}
+
+document.getElementById("goButton").addEventListener("click", startStudy);
+
+document.getElementById("nextButton").addEventListener("click", () => {
+
+    currentIndex++;
+
+    showCard();
+
+});
+
+document.getElementById("backButton").addEventListener("click", () => {
+
+    document.getElementById("studyView").classList.add("hidden");
+    document.getElementById("settingsView").classList.remove("hidden");
+
+});
+
+// Keyboard shortcuts on desktop
+
+document.addEventListener("keydown", e => {
+
+    if (document.getElementById("studyView").classList.contains("hidden"))
+        return;
+
+    if (e.key === " " || e.key === "ArrowRight") {
+
+        e.preventDefault();
+
+        currentIndex++;
+
+        showCard();
+
+    }
+
+});
+
+</script>
+
+</body>
+</html>
